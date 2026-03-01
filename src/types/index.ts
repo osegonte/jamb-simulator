@@ -21,8 +21,11 @@ export interface Question {
   subject_id: string
   topic_id: string
   subtopic_id?: string
+  question_id?: string
   question_text: string
-  question_image_url?: string
+  passage_text?: string | null
+  question_image_url?: string | null
+  passage_image_url?: string | null
   render_type: 'text' | 'latex' | 'image' | 'chart'
   option_a: string
   option_b: string
@@ -31,6 +34,7 @@ export interface Question {
   correct_option: 'a' | 'b' | 'c' | 'd'
   explanation?: string
   difficulty_level: string
+  status?: string
   topics?: { name: string }
   subtopics?: { name: string }
 }
