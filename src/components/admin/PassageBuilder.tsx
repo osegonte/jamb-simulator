@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import type { Topic, Passage } from '../../hooks/useAdminData'
+import type { Topic, Passage, AdminQuestion } from '../../hooks/useAdminData'
 import { generateQuestionId, generateGroupId, isQuestionIdTaken, PATTERN_CODES } from '../../hooks/useAdminData'
 import { supabaseAdmin } from '../../lib/supabase'
 
@@ -11,6 +11,8 @@ interface Props {
   onGetOrCreateTopic: (name: string) => Promise<string | null>
   onCreatePassage: (data: Omit<Passage, 'id' | 'created_at'>) => Promise<Passage | null>
   onAddQuestion: (data: Record<string, unknown>) => Promise<boolean>
+  onUpdateQuestion: (id: string, updates: Partial<AdminQuestion>) => Promise<boolean>
+  onDeleteQuestion: (id: string) => Promise<boolean>
   onReloadPassages: () => void
 }
 
@@ -200,7 +202,7 @@ export default function GroupedQuestionBuilder({
         section: passageType,
         year: null,
         render_type: 'text',
-        status: 'approved',
+        status: 'floating', // ← lands in Floating Queue for review before going live
       })
 
       if (ok) saved++
@@ -295,7 +297,7 @@ export default function GroupedQuestionBuilder({
                 </div>
               )}
 
-              {/* Passage text — for comprehension and cloze (optional for stimulus) */}
+              {/* Passage text */}
               <div>
                 <label className={labelClass}>
                   {passageType === 'stimulus' ? 'Caption / Context Text' : 'Passage Text'}
@@ -507,7 +509,7 @@ export default function GroupedQuestionBuilder({
               />
             </div>
 
-            {/* Options A + B (always required) */}
+            {/* Options A + B */}
             {(['a', 'b'] as const).map(opt => (
               <div key={opt} className="flex gap-2 items-center">
                 <button type="button" onClick={() => updateSlot(slot.key, 'correct_option', opt)}
@@ -575,7 +577,7 @@ export default function GroupedQuestionBuilder({
 
       {savedCount > 0 && (
         <div className="px-4 py-3 bg-green-50 border border-green-200 text-green-700 text-sm font-medium">
-          ✓ {savedCount} question{savedCount !== 1 ? 's' : ''} saved as floating. Ready for next batch.
+          ✓ {savedCount} question{savedCount !== 1 ? 's' : ''} saved to Floating Queue. Go to Floating Queue tab to review and approve.
         </div>
       )}
 
@@ -583,7 +585,7 @@ export default function GroupedQuestionBuilder({
         <button onClick={handleSaveAll}
           disabled={saving || slots.some(s => !s.question_text.trim() || s.id_status === 'taken')}
           className="w-full py-3 bg-black text-white text-sm font-bold uppercase tracking-widest hover:bg-gray-800 disabled:opacity-40 transition-colors">
-          {saving ? 'Saving...' : `Save All ${slots.length} Question${slots.length !== 1 ? 's' : ''} → Floating`}
+          {saving ? 'Saving...' : `Save ${slots.length} Question${slots.length !== 1 ? 's' : ''} → Floating Queue`}
         </button>
       </div>
     </div>

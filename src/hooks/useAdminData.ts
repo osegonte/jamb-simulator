@@ -21,7 +21,7 @@ export interface Passage {
   subject_id: string
   passage_type: 'comprehension' | 'cloze' | 'stimulus'
   passage_text: string
-  passage_image_url?: string | null   // for stimulus (diagram/chart)
+  passage_image_url?: string | null
   year: number | null
   created_at: string
 }
@@ -51,6 +51,7 @@ export interface AdminQuestion {
   year: number | null
   pattern_code: string | null
   topics?: { name: string } | null
+  passages?: { group_id: string } | null
 }
 
 // ─── Subject prefix map ───────────────────────────────────────────────────────
@@ -118,11 +119,10 @@ export function generateGroupId(
 export interface SectionDef {
   key: string
   label: string
-  type: string        // question_type value stored in DB
-  grouped: boolean    // true = uses PassageBuilder (comprehension/cloze)
+  type: string
+  grouped: boolean
 }
 
-// Use of English — full taxonomy
 const ENGLISH_SECTIONS: SectionDef[] = [
   { key: 'comprehension', label: 'Comprehension',                  type: 'passage',     grouped: true  },
   { key: 'cloze',         label: 'Cloze Test',                     type: 'cloze',       grouped: true  },
@@ -133,29 +133,18 @@ const ENGLISH_SECTIONS: SectionDef[] = [
   { key: 'literature',    label: 'Literature',                     type: 'literature',  grouped: false },
 ]
 
-// Future subjects — add here as you research them
-// const MATHS_SECTIONS: SectionDef[] = [ ... ]
-// const BIOLOGY_SECTIONS: SectionDef[] = [ ... ]
-
-// Map subject name → section list
 const SUBJECT_SECTIONS: Record<string, SectionDef[]> = {
   'Use of English': ENGLISH_SECTIONS,
-  // 'Mathematics': MATHS_SECTIONS,   ← uncomment when ready
-  // 'Biology': BIOLOGY_SECTIONS,
 }
 
-// Returns section list for a given subject.
-// Empty array means no section taxonomy defined yet — UI hides the section picker.
 export function getSectionsForSubject(subjectName: string): SectionDef[] {
   return SUBJECT_SECTIONS[subjectName] || []
 }
 
-// Convenience: all standalone (non-grouped) sections for a subject
 export function getStandaloneSections(subjectName: string): SectionDef[] {
   return getSectionsForSubject(subjectName).filter(s => !s.grouped)
 }
 
-// Convenience: all grouped (passage-based) sections for a subject
 export function getGroupedSections(subjectName: string): SectionDef[] {
   return getSectionsForSubject(subjectName).filter(s => s.grouped)
 }
@@ -287,16 +276,30 @@ export function useSubjectData(subjectId: string) {
     loadQuestions()
   }, [loadTopics, loadPassages, loadQuestions])
 
+  // ─── Derived: only passages that have at least one approved question ───────
+  // Used for the Grouped Questions tab — pending passages stay in Floating Queue only
+  const livePassages = (() => {
+    // Load all questions unfiltered to compute this correctly (questions state may be filtered)
+    // We use a Set of passage IDs that have approved questions
+    const approvedPassageIds = new Set(
+      questions
+        .filter(q => q.status === 'approved' && q.passage_id)
+        .map(q => q.passage_id!)
+    )
+    return passages.filter(p => approvedPassageIds.has(p.id))
+  })()
+
+  // ─── Derived: floating questions split by type ────────────────────────────
+  const floatingQuestions = questions.filter(q => !q.status || q.status === 'floating')
+
   const getOrCreateTopic = async (topicName: string): Promise<string | null> => {
     if (!topicName.trim()) return null
     const name = topicName.trim()
-    // Read: use admin client to bypass RLS
     const { data: existing } = await supabaseAdmin
       .from('topics').select('id')
       .eq('subject_id', subjectId).ilike('name', name)
       .maybeSingle()
     if (existing) return existing.id
-    // Write: needs admin client
     const { data: created } = await supabaseAdmin
       .from('topics').insert({ subject_id: subjectId, name })
       .select('id').single()
@@ -330,10 +333,13 @@ export function useSubjectData(subjectId: string) {
     return !error
   }
 
-  const floatingQuestions = questions.filter(q => !q.status || q.status === 'floating')
-
   return {
-    questions, floatingQuestions, passages, topics, loading,
+    questions,
+    floatingQuestions,
+    passages,       // ALL passages — for PassageBuilder "add to existing" list
+    livePassages,   // Only passages with approved questions — for Grouped Questions tab display
+    topics,
+    loading,
     statusFilter, setStatusFilter,
     sectionFilter, setSectionFilter,
     search, setSearch,

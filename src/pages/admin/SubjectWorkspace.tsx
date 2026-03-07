@@ -5,9 +5,10 @@ import FloatingQueue from '../../components/admin/FloatingQueue'
 import AddQuestion from '../../components/admin/AddQuestion'
 import BulkImport from '../../components/admin/BulkImport'
 import PassageBuilder from '../../components/admin/PassageBuilder'
+import PDFImport from '../../components/admin/PDFImport'
 import { useState } from 'react'
 
-type Tab = 'all' | 'floating' | 'add' | 'passages' | 'import'
+type Tab = 'all' | 'floating' | 'add' | 'passages' | 'import' | 'ai'
 
 export default function SubjectWorkspace() {
   const { subjectId } = useParams<{ subjectId: string }>()
@@ -17,7 +18,7 @@ export default function SubjectWorkspace() {
   const [activeTab, setActiveTab] = useState<Tab>('all')
 
   const {
-    questions, floatingQuestions, passages, topics, loading,
+    questions, floatingQuestions, passages, livePassages, topics, loading,
     statusFilter, setStatusFilter,
     sectionFilter, setSectionFilter,
     search, setSearch,
@@ -30,12 +31,13 @@ export default function SubjectWorkspace() {
   const totalApproved = questions.filter(q => q.status === 'approved').length
   const totalFloating = floatingQuestions.length
 
-  const tabs: { key: Tab; label: string; count?: number; highlight?: boolean }[] = [
-    { key: 'all', label: 'All Questions', count: questions.length },
-    { key: 'floating', label: 'Floating Queue', count: totalFloating, highlight: totalFloating > 0 },
-    { key: 'passages', label: 'Grouped Questions', count: passages.length },
-    { key: 'add', label: 'Add Question' },
-    { key: 'import', label: 'Bulk Import' },
+  const tabs: { key: Tab; label: string; count?: number; highlight?: boolean; violet?: boolean }[] = [
+    { key: 'all',      label: 'All Questions',     count: questions.length },
+    { key: 'floating', label: 'Floating Queue',    count: totalFloating, highlight: totalFloating > 0 },
+    { key: 'passages', label: 'Grouped Questions', count: livePassages.length },
+    { key: 'add',      label: 'Add Question' },
+    { key: 'import',   label: 'Bulk Import' },
+    { key: 'ai',       label: '✦ AI Import',       violet: true },
   ]
 
   return (
@@ -81,7 +83,11 @@ export default function SubjectWorkspace() {
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
               className={`relative px-5 py-3.5 text-xs font-bold tracking-widest uppercase transition-colors border-b-2 ${
-                activeTab === tab.key
+                tab.violet
+                  ? activeTab === tab.key
+                    ? 'text-violet-600 border-violet-500'
+                    : 'text-violet-400 border-transparent hover:text-violet-600'
+                  : activeTab === tab.key
                   ? 'text-black border-black'
                   : 'text-gray-400 border-transparent hover:text-gray-600'
               }`}
@@ -134,18 +140,36 @@ export default function SubjectWorkspace() {
             )}
 
             {activeTab === 'passages' && (
-              <PassageBuilder
-                subjectId={subjectId!}
-                subjectName={subjectName}
-                topics={topics}
-                passages={passages}
-                onGetOrCreateTopic={getOrCreateTopic}
-                onCreatePassage={createPassage}
-                onAddQuestion={addQuestion}
-                onUpdateQuestion={(id, updates) => updateQuestion(id, updates)}
-                onDeleteQuestion={(id) => deleteQuestion(id)}
-                onReloadPassages={reloadPassages}
-              />
+              <>
+                {floatingQuestions.some(q => !!q.passage_id) && (
+                  <div className="bg-yellow-50 border border-yellow-200 px-5 py-3 mb-4 flex items-center justify-between">
+                    <p className="text-xs text-yellow-700">
+                      <span className="font-bold">
+                        {floatingQuestions.filter(q => !!q.passage_id).length} grouped question{floatingQuestions.filter(q => !!q.passage_id).length !== 1 ? 's' : ''}
+                      </span>
+                      {' '}pending approval — review in Floating Queue.
+                    </p>
+                    <button
+                      onClick={() => setActiveTab('floating')}
+                      className="text-xs font-bold text-yellow-700 underline hover:text-yellow-900"
+                    >
+                      Go to Floating Queue →
+                    </button>
+                  </div>
+                )}
+                <PassageBuilder
+                  subjectId={subjectId!}
+                  subjectName={subjectName}
+                  topics={topics}
+                  passages={passages}
+                  onGetOrCreateTopic={getOrCreateTopic}
+                  onCreatePassage={createPassage}
+                  onAddQuestion={addQuestion}
+                  onUpdateQuestion={(id, updates) => updateQuestion(id, updates)}
+                  onDeleteQuestion={(id) => deleteQuestion(id)}
+                  onReloadPassages={reloadPassages}
+                />
+              </>
             )}
 
             {activeTab === 'add' && (
@@ -163,6 +187,14 @@ export default function SubjectWorkspace() {
                 subjectId={subjectId!}
                 onGetOrCreateTopic={getOrCreateTopic}
                 onDone={() => { reload(); setActiveTab('all') }}
+              />
+            )}
+
+            {activeTab === 'ai' && (
+              <PDFImport
+                subjectId={subjectId!}
+                subjectName={subjectName}
+                onDone={() => { reload(); reloadPassages(); setActiveTab('floating') }}
               />
             )}
           </>
