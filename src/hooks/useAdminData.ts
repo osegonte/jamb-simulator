@@ -15,6 +15,13 @@ export interface Topic {
   subject_id: string
 }
 
+export interface Subtopic {
+  id: string
+  name: string
+  topic_id: string
+  subject_id: string
+}
+
 export interface Passage {
   id: string
   group_id: string
@@ -203,21 +210,23 @@ export function useAdminData() {
 
   const loadSubjects = useCallback(async () => {
     setLoading(true)
-    const [subjectsRes, questionsRes] = await Promise.all([
-      supabaseAdmin.from('subjects').select('id, name').order('name'),
-      supabaseAdmin.from('questions').select('id, subject_id, status'),
-    ])
+    const subjectsRes = await supabaseAdmin.from('subjects').select('id, name').order('name')
     const subjectList = subjectsRes.data || []
-    const questionList = questionsRes.data || []
-    const enriched: Subject[] = subjectList.map(s => {
-      const sq = questionList.filter(q => q.subject_id === s.id)
+
+    const enriched: Subject[] = await Promise.all(subjectList.map(async s => {
+      const [totalRes, approvedRes, floatingRes] = await Promise.all([
+        supabaseAdmin.from('questions').select('id', { count: 'exact', head: true }).eq('subject_id', s.id),
+        supabaseAdmin.from('questions').select('id', { count: 'exact', head: true }).eq('subject_id', s.id).eq('status', 'approved'),
+        supabaseAdmin.from('questions').select('id', { count: 'exact', head: true }).eq('subject_id', s.id).eq('status', 'floating'),
+      ])
       return {
         ...s,
-        question_count: sq.length,
-        approved_count: sq.filter(q => q.status === 'approved').length,
-        floating_count: sq.filter(q => !q.status || q.status === 'floating').length,
+        question_count: totalRes.count ?? 0,
+        approved_count: approvedRes.count ?? 0,
+        floating_count: floatingRes.count ?? 0,
       }
-    })
+    }))
+
     setSubjects(enriched)
     setLoading(false)
   }, [])
@@ -230,6 +239,7 @@ export function useSubjectData(subjectId: string) {
   const [questions, setQuestions] = useState<AdminQuestion[]>([])
   const [passages, setPassages] = useState<Passage[]>([])
   const [topics, setTopics] = useState<Topic[]>([])
+  const [subtopics, setSubtopics] = useState<Subtopic[]>([])
   const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [sectionFilter, setSectionFilter] = useState<string>('all')
@@ -241,6 +251,14 @@ export function useSubjectData(subjectId: string) {
       .from('topics').select('id, name, subject_id')
       .eq('subject_id', subjectId).order('name')
     setTopics(data || [])
+  }, [subjectId])
+
+  const loadSubtopics = useCallback(async () => {
+    if (!subjectId) return
+    const { data } = await supabaseAdmin
+      .from('subtopics').select('id, name, topic_id, subject_id')
+      .eq('subject_id', subjectId).order('name')
+    setSubtopics(data || [])
   }, [subjectId])
 
   const loadPassages = useCallback(async () => {
@@ -265,16 +283,17 @@ export function useSubjectData(subjectId: string) {
     if (sectionFilter !== 'all') query = query.eq('section', sectionFilter)
     if (search.trim()) query = query.ilike('question_text', `%${search.trim()}%`)
 
-    const { data } = await query.limit(200)
+    const { data } = await query.limit(1000)
     setQuestions(data || [])
     setLoading(false)
   }, [subjectId, statusFilter, sectionFilter, search])
 
   useEffect(() => {
     loadTopics()
+    loadSubtopics()
     loadPassages()
     loadQuestions()
-  }, [loadTopics, loadPassages, loadQuestions])
+  }, [loadTopics, loadSubtopics, loadPassages, loadQuestions])
 
   // ─── Derived: only passages that have at least one approved question ───────
   // Used for the Grouped Questions tab — pending passages stay in Floating Queue only
@@ -307,6 +326,21 @@ export function useSubjectData(subjectId: string) {
     return null
   }
 
+  const getOrCreateSubtopic = async (subtopicName: string, topicId: string): Promise<string | null> => {
+    if (!subtopicName.trim() || !topicId) return null
+    const name = subtopicName.trim()
+    const { data: existing } = await supabaseAdmin
+      .from('subtopics').select('id')
+      .eq('topic_id', topicId).ilike('name', name)
+      .maybeSingle()
+    if (existing) return existing.id
+    const { data: created } = await supabaseAdmin
+      .from('subtopics').insert({ subject_id: subjectId, topic_id: topicId, name })
+      .select('id').single()
+    if (created) { await loadSubtopics(); return created.id }
+    return null
+  }
+
   const createPassage = async (data: Omit<Passage, 'id' | 'created_at'>): Promise<Passage | null> => {
     const { data: created, error } = await supabaseAdmin
       .from('passages').insert(data).select('*').single()
@@ -336,9 +370,10 @@ export function useSubjectData(subjectId: string) {
   return {
     questions,
     floatingQuestions,
-    passages,       // ALL passages — for PassageBuilder "add to existing" list
-    livePassages,   // Only passages with approved questions — for Grouped Questions tab display
+    passages,
+    livePassages,
     topics,
+    subtopics,
     loading,
     statusFilter, setStatusFilter,
     sectionFilter, setSectionFilter,
@@ -346,6 +381,7 @@ export function useSubjectData(subjectId: string) {
     reload: loadQuestions,
     reloadPassages: loadPassages,
     getOrCreateTopic,
+    getOrCreateSubtopic,
     createPassage,
     updateQuestion,
     deleteQuestion,

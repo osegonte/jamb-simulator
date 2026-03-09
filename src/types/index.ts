@@ -79,3 +79,5 @@ export type ExamStatus = 'idle' | 'loading' | 'active' | 'submitted' | 'error'
 export type RenderType = 'text' | 'latex' | 'image' | 'chart'
 export type Difficulty = 'easy' | 'medium' | 'hard'
 export type Option = 'a' | 'b' | 'c' | 'd'
+
+
