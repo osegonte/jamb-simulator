@@ -57,6 +57,13 @@ export interface AdminQuestion {
   section: string | null
   year: number | null
   pattern_code: string | null
+  // ── Diagram fields ──────────────────────────────
+  needs_diagram?: boolean
+  diagram_status?: 'none' | 'pending' | 'auto_generated' | 'manual_uploaded' | 'skipped'
+  diagram_url?: string | null
+  diagram_description?: string | null
+  diagram_type?: string | null
+  // ── Joins ───────────────────────────────────────
   topics?: { name: string } | null
   passages?: { group_id: string } | null
 }
@@ -275,7 +282,7 @@ export function useSubjectData(subjectId: string) {
     setLoading(true)
     let query = supabaseAdmin
       .from('questions')
-      .select('*, topics(name)')
+      .select('*, needs_diagram, diagram_status, diagram_url, diagram_description, diagram_type, topics(name)')
       .eq('subject_id', subjectId)
       .order('created_at', { ascending: false })
 
@@ -296,10 +303,7 @@ export function useSubjectData(subjectId: string) {
   }, [loadTopics, loadSubtopics, loadPassages, loadQuestions])
 
   // ─── Derived: only passages that have at least one approved question ───────
-  // Used for the Grouped Questions tab — pending passages stay in Floating Queue only
   const livePassages = (() => {
-    // Load all questions unfiltered to compute this correctly (questions state may be filtered)
-    // We use a Set of passage IDs that have approved questions
     const approvedPassageIds = new Set(
       questions
         .filter(q => q.status === 'approved' && q.passage_id)
@@ -308,7 +312,7 @@ export function useSubjectData(subjectId: string) {
     return passages.filter(p => approvedPassageIds.has(p.id))
   })()
 
-  // ─── Derived: floating questions split by type ────────────────────────────
+  // ─── Derived: floating questions ──────────────────────────────────────────
   const floatingQuestions = questions.filter(q => !q.status || q.status === 'floating')
 
   const getOrCreateTopic = async (topicName: string): Promise<string | null> => {

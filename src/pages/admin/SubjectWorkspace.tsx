@@ -7,9 +7,10 @@ import AddQuestion from '../../components/admin/AddQuestion'
 import PassageBuilder from '../../components/admin/PassageBuilder'
 import PDFImport from '../../components/admin/PDFImport'
 import TopicsView from '../../components/admin/TopicsView'
+import DiagramQueue from '../../components/admin/DiagramQueue'
 import { useState } from 'react'
 
-type Tab = 'all' | 'floating' | 'passages' | 'import' | 'topics'
+type Tab = 'all' | 'floating' | 'passages' | 'import' | 'topics' | 'diagrams'
 
 export default function SubjectWorkspace() {
   const { subjectId } = useParams<{ subjectId: string }>()
@@ -30,12 +31,14 @@ export default function SubjectWorkspace() {
   } = useSubjectData(subjectId!)
 
   const approvedGroupedCount = questions.filter(q => q.passage_id && q.status === 'approved').length
-  const totalApproved = questions.filter(q => q.status === 'approved').length
-  const totalFloating = floatingQuestions.length
+  const totalApproved  = questions.filter(q => q.status === 'approved').length
+  const totalFloating  = floatingQuestions.length
+  const totalDiagrams  = questions.filter(q => q.needs_diagram && q.diagram_status === 'pending').length
 
-  const tabs: { key: Tab; label: string; count?: number; highlight?: boolean }[] = [
-    { key: 'all',      label: 'All Questions', count: questions.length },
-    { key: 'floating', label: 'Floating Queue', count: totalFloating, highlight: totalFloating > 0 },
+  const tabs: { key: Tab; label: string; count?: number; highlight?: boolean; amber?: boolean }[] = [
+    { key: 'all',      label: 'All Questions',    count: questions.length },
+    { key: 'floating', label: 'Floating Queue',   count: totalFloating,  highlight: totalFloating > 0 },
+    { key: 'diagrams', label: '📐 Diagrams',       count: totalDiagrams,  amber: totalDiagrams > 0 },
     { key: 'passages', label: 'Grouped Questions', count: livePassages.length },
     { key: 'import',   label: '✦ Import' },
     { key: 'topics',   label: 'Topics' },
@@ -61,6 +64,7 @@ export default function SubjectWorkspace() {
             <span className="text-xs text-gray-400 tabular-nums">
               <span className="text-green-700 font-bold">{totalApproved}</span> approved
               {totalFloating > 0 && <> · <span className="text-yellow-600 font-bold">{totalFloating}</span> floating</>}
+              {totalDiagrams > 0 && <> · <span className="text-amber-500 font-bold">{totalDiagrams}</span> diagrams pending</>}
               {' · '}<span className="font-bold text-orange-500">{approvedGroupedCount}</span> grouped
             </span>
             <a href="/" className="text-xs text-gray-400 underline hover:text-black">View Simulator →</a>
@@ -76,12 +80,16 @@ export default function SubjectWorkspace() {
               className={`px-5 py-3.5 text-xs font-bold tracking-widest uppercase transition-colors border-b-2 ${
                 tab.key === 'import'
                   ? activeTab === tab.key ? 'text-violet-600 border-violet-500' : 'text-violet-400 border-transparent hover:text-violet-600'
+                  : tab.amber
+                  ? activeTab === tab.key ? 'text-amber-600 border-amber-500' : 'text-amber-500 border-transparent hover:text-amber-600'
                   : activeTab === tab.key ? 'text-black border-black' : 'text-gray-400 border-transparent hover:text-gray-600'
               }`}>
               {tab.label}
               {tab.count !== undefined && tab.count > 0 && (
                 <span className={`ml-2 text-xs font-black tabular-nums ${
-                  tab.highlight ? 'text-yellow-600' : tab.key === 'passages' ? 'text-purple-500' : 'text-gray-400'
+                  tab.highlight ? 'text-yellow-600' :
+                  tab.amber     ? 'text-amber-500'  :
+                  tab.key === 'passages' ? 'text-purple-500' : 'text-gray-400'
                 }`}>{tab.count}</span>
               )}
             </button>
@@ -113,6 +121,10 @@ export default function SubjectWorkspace() {
                 onUpdate={(id, updates) => updateQuestion(id, updates)}
                 onDelete={(id) => deleteQuestion(id)}
               />
+            )}
+
+            {activeTab === 'diagrams' && (
+              <DiagramQueue subjectId={subjectId!} />
             )}
 
             {activeTab === 'passages' && (

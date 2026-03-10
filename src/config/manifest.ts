@@ -104,3 +104,16 @@ export function getByCategory(category: SubjectConfig['category']): SubjectConfi
     .filter(s => s.category === category)
     .sort((a, b) => a.priority - b.priority)
 }
+
+// ─── Subject type helpers (used by PDFImport) ─────────────────────────────────
+export function getPrefix(subjectName: string): string {
+  return getConfig(subjectName)?.prefix || subjectName.split(' ')[0].slice(0, 4).toUpperCase()
+}
+
+export function isEnglishSubject(subjectName: string): boolean {
+  return subjectName.toLowerCase().includes('english') && !subjectName.toLowerCase().includes('literature')
+}
+
+export function isMathsSubject(subjectName: string): boolean {
+  return subjectName.toLowerCase().includes('mathematics') || subjectName.toLowerCase().includes('maths')
+}
