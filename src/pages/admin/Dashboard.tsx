@@ -1,9 +1,12 @@
 // src/pages/admin/Dashboard.tsx
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAdminData } from '../../hooks/useAdminData'
 import SubjectCard from '../../components/admin/SubjectCard'
 import type { Subject } from '../../hooks/useAdminData'
+import { runInitialSync } from '../../lib/csSync'
+import { exportCurriculum, importKlassQuestions } from '../../lib/klassFileSync'
+import type { ImportResult } from '../../lib/klassFileSync'
 
 const CATEGORY_ORDER = ['science', 'arts', 'commercial'] as const
 const CATEGORY_LABEL: Record<string, string> = { science: 'Science', arts: 'Arts', commercial: 'Commercial' }
@@ -46,10 +49,61 @@ function categorise(subjects: Subject[]): Record<string, Subject[]> {
   return cats
 }
 
+type SyncState = 'idle' | 'syncing' | 'done' | 'error'
+
 export default function Dashboard() {
   const navigate = useNavigate()
   const { subjects, loading } = useAdminData()
   const [open, setOpen] = useState<Record<string, boolean>>({ science: true, arts: false, commercial: false })
+  const [syncState, setSyncState] = useState<SyncState>('idle')
+  const [syncResult, setSyncResult] = useState<string>('')
+
+  // Export
+  const [exporting, setExporting] = useState(false)
+  const [exportMsg, setExportMsg] = useState('')
+
+  // Import
+  const [importing, setImporting] = useState(false)
+  const [importResult, setImportResult] = useState<ImportResult | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const handleExport = async () => {
+    setExporting(true)
+    setExportMsg('')
+    try {
+      await exportCurriculum()
+      setExportMsg('Downloaded ✓')
+    } catch (e: unknown) {
+      setExportMsg('Export failed')
+      console.error('[export]', e)
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setImporting(true)
+    setImportResult(null)
+    const result = await importKlassQuestions(file)
+    setImportResult(result)
+    setImporting(false)
+    e.target.value = ''
+  }
+
+  const handleInitialSync = async () => {
+    setSyncState('syncing')
+    setSyncResult('')
+    const result = await runInitialSync()
+    if (result.errors.length > 0 && result.subjects === 0) {
+      setSyncState('error')
+      setSyncResult(result.errors[0])
+    } else {
+      setSyncState('done')
+      setSyncResult(`${result.subjects} subjects · ${result.topics} topics · ${result.subtopics} subtopics synced${result.errors.length > 0 ? ` (${result.errors.length} skipped)` : ''}`)
+    }
+  }
 
   const totalQuestions = subjects.reduce((s, x) => s + x.question_count, 0)
   const totalApproved  = subjects.reduce((s, x) => s + x.approved_count, 0)
@@ -72,7 +126,63 @@ export default function Dashboard() {
               <span className="text-sm font-black text-black">Question Bank</span>
             </div>
           </div>
-          <a href="/" className="text-xs text-gray-400 underline hover:text-black">View Simulator →</a>
+          <div className="flex items-center gap-3">
+            {syncResult && (
+              <span className={`text-xs font-medium ${syncState === 'error' ? 'text-red-500' : 'text-green-600'}`}>
+                {syncState === 'done' ? '✓ ' : '✗ '}{syncResult}
+              </span>
+            )}
+            {/* Import result badge */}
+            {importResult && (
+              <span className={`text-xs font-medium ${importResult.errors.length > 0 && importResult.imported === 0 ? 'text-red-500' : 'text-green-600'}`}>
+                {importResult.imported > 0
+                  ? `✓ ${importResult.imported} imported${importResult.skipped > 0 ? `, ${importResult.skipped} skipped` : ''}`
+                  : `✗ ${importResult.errors[0] ?? 'Import failed'}`}
+              </span>
+            )}
+
+            {/* Export badge */}
+            {exportMsg && (
+              <span className="text-xs font-medium text-green-600">{exportMsg}</span>
+            )}
+
+            {/* Import from KLASS */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".json"
+              className="hidden"
+              onChange={handleImportFile}
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={importing}
+              className="text-xs font-bold px-3 py-1.5 border border-gray-200 text-gray-500 hover:text-black hover:border-gray-400 disabled:opacity-40 transition-colors"
+              title="Import questions from KLASS Studio JSON export"
+            >
+              {importing ? 'Importing...' : '← Import KLASS'}
+            </button>
+
+            {/* Export to KLASS */}
+            <button
+              onClick={handleExport}
+              disabled={exporting}
+              className="text-xs font-bold px-3 py-1.5 border border-gray-200 text-gray-500 hover:text-black hover:border-gray-400 disabled:opacity-40 transition-colors"
+              title="Download curriculum JSON for KLASS Studio"
+            >
+              {exporting ? 'Exporting...' : 'Export → KLASS'}
+            </button>
+
+            <button
+              onClick={handleInitialSync}
+              disabled={syncState === 'syncing'}
+              className="text-xs font-bold px-3 py-1.5 border border-gray-200 text-gray-500 hover:text-black hover:border-gray-400 disabled:opacity-40 transition-colors"
+              title="Push all topics/subtopics to KLASS Studio (legacy Realtime sync)"
+            >
+              {syncState === 'syncing' ? 'Syncing...' : 'Sync → KLASS'}
+            </button>
+            <a href="/" className="text-xs text-gray-400 underline hover:text-black">View Simulator →</a>
+          </div>
         </div>
       </div>
 

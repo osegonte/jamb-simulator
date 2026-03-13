@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { supabase, supabaseAdmin } from '../lib/supabase'
+import { supabaseAdmin } from '../lib/supabase'
 
 export interface Subject {
   id: string
@@ -26,11 +26,17 @@ export interface Passage {
   id: string
   group_id: string
   subject_id: string
-  passage_type: 'comprehension' | 'cloze' | 'stimulus'
+  passage_type: 'comprehension' | 'cloze' | 'stimulus' | 'data_response' | 'summary' | 'reading_text'
   passage_text: string
   passage_image_url?: string | null
   year: number | null
   created_at: string
+  // Diagram fields — present on passages table
+  needs_diagram?: boolean
+  diagram_status?: 'none' | 'pending' | 'auto_generated' | 'manual_uploaded' | 'skipped'
+  diagram_url?: string | null
+  diagram_type?: string | null
+  diagram_description?: string | null
 }
 
 export interface AdminQuestion {

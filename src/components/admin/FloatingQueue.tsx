@@ -58,13 +58,13 @@ function StandaloneReviewer({ questions, topics, onUpdate, onDelete }: Omit<Prop
   const buildUpdates = (status: string) => ({
     status,
     question_text: editText,
-    explanation: editExplanation || null,
+    explanation: editExplanation || undefined,
     difficulty_level: editDifficulty,
     correct_option: editCorrect,
     option_a: editOptA,
     option_b: editOptB,
-    option_c: editOptC || null,
-    option_d: editOptD || null,
+    option_c: editOptC || undefined,
+    option_d: editOptD || undefined,
   })
 
   const handleApprove = async () => {
@@ -458,7 +458,7 @@ export default function FloatingQueue({ questions, passages, topics, onUpdate, o
 
       {mode === 'standalone'
         ? <StandaloneReviewer questions={standaloneQs} topics={topics} onUpdate={onUpdate} onDelete={onDelete} />
-        : <GroupedReviewer questions={groupedQs} passages={passages} topics={topics} onUpdate={onUpdate} onDelete={onDelete} />
+        : <GroupedReviewer questions={groupedQs} passages={passages} onUpdate={onUpdate} onDelete={onDelete} />
       }
     </div>
   )

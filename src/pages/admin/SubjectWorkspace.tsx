@@ -3,14 +3,12 @@ import { useParams, useLocation, useNavigate } from 'react-router-dom'
 import { useSubjectData } from '../../hooks/useAdminData'
 import QuestionTable from '../../components/admin/QuestionTable'
 import FloatingQueue from '../../components/admin/FloatingQueue'
-import AddQuestion from '../../components/admin/AddQuestion'
 import PassageBuilder from '../../components/admin/PassageBuilder'
-import PDFImport from '../../components/admin/PDFImport'
 import TopicsView from '../../components/admin/TopicsView'
-import DiagramQueue from '../../components/admin/DiagramQueue'
-import { useState } from 'react'
 
-type Tab = 'all' | 'floating' | 'passages' | 'import' | 'topics' | 'diagrams'
+type Tab = 'all' | 'floating' | 'passages' | 'topics'
+
+import { useState } from 'react'
 
 export default function SubjectWorkspace() {
   const { subjectId } = useParams<{ subjectId: string }>()
@@ -18,29 +16,24 @@ export default function SubjectWorkspace() {
   const navigate = useNavigate()
   const subjectName = (location.state as { subjectName?: string })?.subjectName || 'Subject'
   const [activeTab, setActiveTab] = useState<Tab>('all')
-  const [showAddQuestion, setShowAddQuestion] = useState(false)
 
   const {
-    questions, floatingQuestions, passages, livePassages, topics, subtopics, loading,
+    questions, floatingQuestions, passages, livePassages, topics, loading,
     statusFilter, setStatusFilter,
-    sectionFilter, setSectionFilter,
     search, setSearch,
-    reload, reloadPassages,
-    getOrCreateTopic, getOrCreateSubtopic, createPassage,
+    reload: _reload, reloadPassages,
+    getOrCreateTopic, createPassage,
     updateQuestion, deleteQuestion, addQuestion,
   } = useSubjectData(subjectId!)
 
-  const approvedGroupedCount = questions.filter(q => q.passage_id && q.status === 'approved').length
-  const totalApproved  = questions.filter(q => q.status === 'approved').length
+  const totalApproved = questions.filter(q => q.status === 'approved').length
   const totalFloating  = floatingQuestions.length
-  const totalDiagrams  = questions.filter(q => q.needs_diagram && q.diagram_status === 'pending').length
+  const approvedGroupedCount = questions.filter(q => q.passage_id && q.status === 'approved').length
 
-  const tabs: { key: Tab; label: string; count?: number; highlight?: boolean; amber?: boolean }[] = [
+  const tabs: { key: Tab; label: string; count?: number; highlight?: boolean }[] = [
     { key: 'all',      label: 'All Questions',    count: questions.length },
-    { key: 'floating', label: 'Floating Queue',   count: totalFloating,  highlight: totalFloating > 0 },
-    { key: 'diagrams', label: '📐 Diagrams',       count: totalDiagrams,  amber: totalDiagrams > 0 },
+    { key: 'floating', label: 'Floating Queue',   count: totalFloating, highlight: totalFloating > 0 },
     { key: 'passages', label: 'Grouped Questions', count: livePassages.length },
-    { key: 'import',   label: '✦ Import' },
     { key: 'topics',   label: 'Topics' },
   ]
 
@@ -64,7 +57,6 @@ export default function SubjectWorkspace() {
             <span className="text-xs text-gray-400 tabular-nums">
               <span className="text-green-700 font-bold">{totalApproved}</span> approved
               {totalFloating > 0 && <> · <span className="text-yellow-600 font-bold">{totalFloating}</span> floating</>}
-              {totalDiagrams > 0 && <> · <span className="text-amber-500 font-bold">{totalDiagrams}</span> diagrams pending</>}
               {' · '}<span className="font-bold text-orange-500">{approvedGroupedCount}</span> grouped
             </span>
             <a href="/" className="text-xs text-gray-400 underline hover:text-black">View Simulator →</a>
@@ -78,17 +70,12 @@ export default function SubjectWorkspace() {
           {tabs.map(tab => (
             <button key={tab.key} onClick={() => setActiveTab(tab.key)}
               className={`px-5 py-3.5 text-xs font-bold tracking-widest uppercase transition-colors border-b-2 ${
-                tab.key === 'import'
-                  ? activeTab === tab.key ? 'text-violet-600 border-violet-500' : 'text-violet-400 border-transparent hover:text-violet-600'
-                  : tab.amber
-                  ? activeTab === tab.key ? 'text-amber-600 border-amber-500' : 'text-amber-500 border-transparent hover:text-amber-600'
-                  : activeTab === tab.key ? 'text-black border-black' : 'text-gray-400 border-transparent hover:text-gray-600'
+                activeTab === tab.key ? 'text-black border-black' : 'text-gray-400 border-transparent hover:text-gray-600'
               }`}>
               {tab.label}
               {tab.count !== undefined && tab.count > 0 && (
                 <span className={`ml-2 text-xs font-black tabular-nums ${
                   tab.highlight ? 'text-yellow-600' :
-                  tab.amber     ? 'text-amber-500'  :
                   tab.key === 'passages' ? 'text-purple-500' : 'text-gray-400'
                 }`}>{tab.count}</span>
               )}
@@ -123,10 +110,6 @@ export default function SubjectWorkspace() {
               />
             )}
 
-            {activeTab === 'diagrams' && (
-              <DiagramQueue subjectId={subjectId!} />
-            )}
-
             {activeTab === 'passages' && (
               <>
                 {floatingQuestions.some(q => !!q.passage_id) && (
@@ -143,44 +126,11 @@ export default function SubjectWorkspace() {
                   onGetOrCreateTopic={getOrCreateTopic}
                   onCreatePassage={createPassage}
                   onAddQuestion={addQuestion}
-                  onUpdateQuestion={(id, updates) => updateQuestion(id, updates)}
-                  onDeleteQuestion={(id) => deleteQuestion(id)}
+                  onUpdateQuestion={(id: string, updates) => updateQuestion(id, updates)}
+                  onDeleteQuestion={(id: string) => deleteQuestion(id)}
                   onReloadPassages={reloadPassages}
                 />
               </>
-            )}
-
-            {activeTab === 'import' && (
-              <div className="space-y-6">
-                {/* AI PDF Import */}
-                <PDFImport
-                  subjectId={subjectId!} subjectName={subjectName}
-                  onDone={() => { reload(); reloadPassages(); setActiveTab('floating') }}
-                />
-
-                {/* Add single question — collapsed by default */}
-                <div className="bg-white border border-gray-200">
-                  <button
-                    onClick={() => setShowAddQuestion(p => !p)}
-                    className="w-full px-5 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
-                  >
-                    <div>
-                      <p className="text-xs font-black tracking-widest text-gray-500 uppercase text-left">Add Single Question</p>
-                      <p className="text-xs text-gray-400 text-left mt-0.5">Manually add one question directly to the bank</p>
-                    </div>
-                    <span className="text-gray-400 text-sm">{showAddQuestion ? '▲' : '▼'}</span>
-                  </button>
-                  {showAddQuestion && (
-                    <div className="border-t border-gray-100 p-5">
-                      <AddQuestion
-                        subjectId={subjectId!} subjectName={subjectName}
-                        topics={topics} onAdd={addQuestion}
-                        onGetOrCreateTopic={getOrCreateTopic}
-                      />
-                    </div>
-                  )}
-                </div>
-              </div>
             )}
 
             {activeTab === 'topics' && (

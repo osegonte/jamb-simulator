@@ -66,7 +66,7 @@ const TYPE_COLORS: Record<PassageType, string> = {
 }
 
 export default function GroupedQuestionBuilder({
-  subjectId, subjectName, topics, passages,
+  subjectId, subjectName, topics: _topics, passages,
   onGetOrCreateTopic, onCreatePassage, onAddQuestion, onReloadPassages,
 }: Props) {
   const [passageMode, setPassageMode] = useState<PassageMode>('new')
